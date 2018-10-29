@@ -38,6 +38,7 @@ import static com.sun.tools.xjc.addon.xew.CommonUtils.setPrivateField;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -262,8 +263,14 @@ public class XmlElementWrapperPlugin extends AbstractConfigurablePlugin {
 				// Create the new interface and collection classes using the specified interface and
 				// collection classes (configuration) with an element type corresponding to
 				// the element type from the collection present in the candidate class (narrowing).
-				JClass collectionInterfaceClass = codeModel.ref(fieldConfiguration.getCollectionInterfaceClass())
-				            .narrow(fieldTypeParametrisations);
+				JClass collectionInterfaceClass;
+				if (candidate.isAnArrayWrapper()) {
+					collectionInterfaceClass = candidate.getFieldClass();
+				}
+				else {
+					collectionInterfaceClass = codeModel.ref(fieldConfiguration.getCollectionInterfaceClass())
+					            .narrow(fieldTypeParametrisations);
+				}
 				JClass collectionImplClass = codeModel.ref(fieldConfiguration.getCollectionImplClass())
 				            .narrow(fieldTypeParametrisations);
 
@@ -307,7 +314,8 @@ public class XmlElementWrapperPlugin extends AbstractConfigurablePlugin {
 				originalImplField.type(collectionInterfaceClass);
 
 				// If instantiation is specified to be "early", add code for creating new instance of the collection class.
-				if (fieldConfiguration.getInstantiationMode() == CommonConfiguration.InstantiationMode.EARLY) {
+				if (fieldConfiguration.getInstantiationMode() == CommonConfiguration.InstantiationMode.EARLY
+				            && !candidate.isAnArrayWrapper()) {
 					logger.debug("Applying EARLY instantiation...");
 					// GENERATED CODE: ... fieldName = new C<T>();
 					originalImplField.init(JExpr._new(collectionImplClass));
@@ -477,7 +485,8 @@ public class XmlElementWrapperPlugin extends AbstractConfigurablePlugin {
 				// GENERATED CODE: public I<T> getFieldName() { ... return fieldName; }
 				JMethod getterMethod = targetClass.method(JMod.PUBLIC, collectionInterfaceClass, "get" + propertyName);
 
-				if (fieldConfiguration.getInstantiationMode() == CommonConfiguration.InstantiationMode.LAZY) {
+				if (fieldConfiguration.getInstantiationMode() == CommonConfiguration.InstantiationMode.LAZY
+				            && !candidate.isAnArrayWrapper()) {
 					logger.debug("Applying LAZY instantiation...");
 					// GENERATED CODE: if (fieldName == null) fieldName = new C<T>();
 					getterMethod.body()._if(JExpr.ref(fieldName).eq(JExpr._null()))._then().assign(JExpr.ref(fieldName),
@@ -710,15 +719,20 @@ public class XmlElementWrapperPlugin extends AbstractConfigurablePlugin {
 
 			JClass fieldType = (JClass) field.type();
 
-			// * The property should be a collection
-			if (!collectionModelClass.isAssignableFrom(fieldType)) {
+			List<JClass> fieldParametrisations;
+			// * The property should be a collection or an array
+			if (collectionModelClass.isAssignableFrom(fieldType)) {
+				fieldParametrisations = fieldType.getTypeParameters();
+
+				// FIXME: All known collections have exactly one parametrisation type.
+				assert fieldParametrisations.size() == 1;
+			}
+			else if (fieldType.isArray() && fieldType.elementType() instanceof JClass) {
+				fieldParametrisations = Collections.singletonList((JClass) fieldType.elementType());
+			}
+			else {
 				continue;
 			}
-
-			List<JClass> fieldParametrisations = fieldType.getTypeParameters();
-
-			// FIXME: All known collections have exactly one parametrisation type.
-			assert fieldParametrisations.size() == 1;
 
 			JDefinedClass fieldParametrisationClass = null;
 			JDefinedClass fieldParametrisationImpl = null;

@@ -253,6 +253,10 @@ public final class Candidate {
 		this.markedForRemoval = false;
 	}
 
+	public boolean isAnArrayWrapper() {
+		return field.type().isArray();
+	}
+
 	@Override
 	public String toString() {
 		return "Candidate[" + getClassName() + " in field " + getFieldClass().name() + " " + getFieldName() + "]";

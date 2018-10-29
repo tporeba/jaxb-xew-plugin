@@ -241,6 +241,11 @@ public class XmlElementWrapperPluginTest {
 		runTest("unqualified", null, false, "RootElement", "package-info");
 	}
 
+	@Test
+	public void testIndexed() throws Exception {
+		runTest("indexed", new String[] { "-Xxew:instantiate", "none" }, false, "RootElement", "package-info");
+	}
+
 	/**
 	 * Standard test for XSD examples.
 	 * 
